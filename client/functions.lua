@@ -99,35 +99,26 @@ openShop = function(store, price)
                 tattoos = true
             }
         end
-        exports['fivem-appearance']:startPlayerCustomization(function (appearance)
-            if (appearance) then
-		if json.encode(appearance.tattoos) == '[]' then
+        exports['fivem-appearance']:startPlayerCustomization(function(appearance)
+            if appearance then
+                if json.encode(appearance.tattoos) == '[]' then
                     appearance.tattoos = tetovaze
                 end
                 if price then
-                    local paid = lib.callback.await('fivem-appearance:payFunds', 100, price)                    
+                    local paid = nil
+                    ESX.TriggerServerCallback('fivem-appearance:payFunds', function(paidCallback)
+                        paid = paidCallback
+                    end, price)
                     if paid then
-                        lib.notify({
-                            title = Strings.success,
-                            description = (Strings.success_desc):format(addCommas(price)),
-                            duration = 3500,
-                            icon = 'basket-shopping',
-                            type = 'success'
-                        })
+                        TriggerEvent('esx:showNotification', (Strings.success_desc):format(addCommas(price)), 'success')
                         TriggerServerEvent('fivem-appearance:save', appearance)
                         InMenu = false
                         ESX.SetPlayerData('ped', PlayerPedId())
                     else
-                        lib.notify({
-                            title = Strings.no_funds,
-                            description = Strings.no_funds_desc,
-                            duration = 3500,
-                            icon = 'ban',
-                            type = 'error'
-                        })                           
+                        TriggerEvent('esx:showNotification', Strings.no_funds_desc, 'error')
                         exports['fivem-appearance']:setPlayerAppearance(currentAppearance)
                         InMenu = false
-                        TriggerServerEvent('fivem-appearance:save',currentAppearance)
+                        TriggerServerEvent('fivem-appearance:save', currentAppearance)
                         ESX.SetPlayerData('ped', PlayerPedId())
                     end
                 else
@@ -144,35 +135,39 @@ openShop = function(store, price)
 end
 
 openWardrobe = function()
-    local outfits = lib.callback.await('fivem-appearance:getOutfits', 100)
-    local Options = {}
-    if outfits then
-        Options = {}
-        for i=1, #outfits do
-            Options[#Options + 1] = {
-                title = outfits[i].name,
-                event = 'fivem-appearance:setOutfit',
-                args = {
-                    ped = outfits[i].ped,
-                    components = outfits[i].components,
-                    props = outfits[i].props
-                }
-            }
+    ESX.TriggerServerCallback('fivem-appearance:getOutfits', function(outfits)
+        local elements = {}
+        if outfits then
+            for i = 1, #outfits do
+                table.insert(elements, {
+                    label = outfits[i].name,
+                    value = outfits[i].id
+                })
+            end
         end
-    else
-        Options = {
+
+        ESX.UI.Menu.Open(
+            'default',
+            GetCurrentResourceName(),
+            'browse_outfits_menu',
             {
-                title = Strings.go_back_desc,
-                event = ''
-            }
-        }
-    end
-    lib.registerContext({
-        id = 'wardrobe_menu',
-        title = Strings.wardrobe_title,
-        options = Options
-    })
-    lib.showContext('wardrobe_menu')
+                title = 'My Outfits',
+                align = 'top-left',
+                elements = elements
+            },
+            function(data, menu)
+                local outfitId = data.current.value
+                ESX.TriggerServerCallback('fivem-appearance:getOutfit', function(outfit)
+                    if outfit then
+                        TriggerEvent('fivem-appearance:setOutfit', outfit)
+                    end
+                end, outfitId)
+            end,
+            function(data, menu)
+                menu.close()
+            end
+        )
+    end)
 end
 
 exports('openWardrobe', openWardrobe)

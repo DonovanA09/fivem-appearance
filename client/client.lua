@@ -50,152 +50,204 @@ end)
 
 RegisterNetEvent('fivem-appearance:setOutfit')
 AddEventHandler('fivem-appearance:setOutfit', function(data)
-	local pedModel = data.ped
-	local pedComponents = data.components
-	local pedProps = data.props
-	local playerPed = PlayerPedId()
-	local currentPedModel = exports['fivem-appearance']:getPedModel(playerPed)
-	if currentPedModel ~= pedModel then
-    	exports['fivem-appearance']:setPlayerModel(pedModel)
-		Wait(500)
-		playerPed = PlayerPedId()
-		exports['fivem-appearance']:setPedComponents(playerPed, pedComponents)
-		exports['fivem-appearance']:setPedProps(playerPed, pedProps)
-		local appearance = exports['fivem-appearance']:getPedAppearance(playerPed)
-		TriggerServerEvent('fivem-appearance:save', appearance)
-		ESX.SetPlayerData('ped', PlayerPedId())
-	else
-		exports['fivem-appearance']:setPedComponents(playerPed, pedComponents)
-		exports['fivem-appearance']:setPedProps(playerPed, pedProps)
-		local appearance = exports['fivem-appearance']:getPedAppearance(playerPed)
-		TriggerServerEvent('fivem-appearance:save', appearance)
-		ESX.SetPlayerData('ped', PlayerPedId())
-	end
+    -- Logic to set an outfit
+    local pedModel = data.ped
+    local pedComponents = data.components
+    local pedProps = data.props
+    local playerPed = PlayerPedId()
+    local currentPedModel = GetEntityModel(playerPed)
+    if currentPedModel ~= pedModel then
+        RequestModel(pedModel)
+        while not HasModelLoaded(pedModel) do
+            Citizen.Wait(0)
+        end
+        SetPlayerModel(PlayerId(), pedModel)
+        SetModelAsNoLongerNeeded(pedModel)
+        playerPed = PlayerPedId()
+        exports['fivem-appearance']:setPedComponents(playerPed, pedComponents)
+        exports['fivem-appearance']:setPedProps(playerPed, pedProps)
+        local appearance = exports['fivem-appearance']:getPedAppearance(playerPed)
+        TriggerServerEvent('fivem-appearance:save', appearance)
+        ESX.SetPlayerData('ped', playerPed)
+        TriggerEvent('skinchanger:loadSkin', appearance)
+        TriggerEvent('esx:showNotification', 'You have changed your appearance')
+    else
+        exports['fivem-appearance']:setPedComponents(playerPed, pedComponents)
+        exports['fivem-appearance']:setPedProps(playerPed, pedProps)
+        local appearance = exports['fivem-appearance']:getPedAppearance(playerPed)
+        TriggerServerEvent('fivem-appearance:save', appearance)
+        ESX.SetPlayerData('ped', playerPed)
+        TriggerEvent('skinchanger:loadSkin', appearance)
+        TriggerEvent('esx:showNotification', 'You have changed your appearance')
+    end
 end)
 
-RegisterNetEvent('fivem-appearance:saveOutfit', function()
-    local input = lib.inputDialog(Strings.save_outfit_title, {Strings.save_outfit_info})
-    if input then
-        local name = input[1]
-        local playerPed = PlayerPedId()
-        local pedModel = exports['fivem-appearance']:getPedModel(playerPed)
-        local pedComponents = exports['fivem-appearance']:getPedComponents(playerPed)
-        local pedProps = exports['fivem-appearance']:getPedProps(playerPed)
-        TriggerServerEvent('fivem-appearance:saveOutfit', name, pedModel, pedComponents, pedProps)
-    end
+RegisterNetEvent('fivem-appearance:saveOutfit')
+AddEventHandler('fivem-appearance:saveOutfit', function()
+    local pedModel = GetEntityModel(PlayerPedId())
+    local pedComponents = exports['fivem-appearance']:getPedComponents(PlayerPedId())
+    local pedProps = exports['fivem-appearance']:getPedProps(PlayerPedId())
+    ESX.UI.Menu.Open(
+        'dialog',
+        GetCurrentResourceName(),
+        'save_outfit_menu',
+        {
+            title = 'Save Outfit',
+        },
+        function(data, menu)
+            local outfitName = data.value
+            if outfitName and outfitName ~= '' then
+                TriggerServerEvent('fivem-appearance:saveOutfit', outfitName, pedModel, pedComponents, pedProps)
+                menu.close()
+                TriggerEvent('esx:showNotification', 'Outfit saved: ' .. outfitName)
+            else
+                TriggerEvent('esx:showNotification', 'Invalid outfit name')
+            end
+        end,
+        function(data, menu)
+            menu.close()
+        end
+    )
+end)
+
+RegisterNetEvent('fivem-appearance:browseOutfits')
+AddEventHandler('fivem-appearance:browseOutfits', function()
+    ESX.TriggerServerCallback('fivem-appearance:getOutfits', function(outfits)
+        local elements = {}
+        if outfits then
+            for i = 1, #outfits do
+                table.insert(elements, {
+                    label = outfits[i].name,
+                    value = outfits[i].id
+                })
+            end
+        end
+
+        ESX.UI.Menu.Open(
+            'default',
+            GetCurrentResourceName(),
+            'browse_outfits_menu',
+            {
+                title = 'My Outfits',
+                align = 'top-left',
+                elements = elements
+            },
+            function(data, menu)
+                local outfitId = data.current.value
+                ESX.TriggerServerCallback('fivem-appearance:getOutfit', function(outfit)
+                    if outfit then
+                        TriggerEvent('fivem-appearance:setOutfit', outfit)
+                    end
+                end, outfitId)
+            end,
+            function(data, menu)
+                menu.close()
+            end
+        )
+    end)
+end)
+
+RegisterNetEvent('fivem-appearance:deleteOutfitMenu')
+AddEventHandler('fivem-appearance:deleteOutfitMenu', function()
+    ESX.TriggerServerCallback('fivem-appearance:getOutfits', function(outfits)
+        local elements = {}
+        if outfits then
+            for i = 1, #outfits do
+                table.insert(elements, {
+                    label = outfits[i].name,
+                    value = outfits[i].id
+                })
+            end
+        end
+
+        ESX.UI.Menu.Open(
+            'default',
+            GetCurrentResourceName(),
+            'delete_outfit_menu',
+            {
+                title = 'Delete Outfit',
+                align = 'top-left',
+                elements = elements
+            },
+            function(data, menu)
+                local outfitId = data.current.value
+                ESX.UI.Menu.Open(
+                    'default',
+                    GetCurrentResourceName(),
+                    'confirm_delete_outfit_menu',
+                    {
+                        title = 'Are you sure?',
+                        align = 'top-left',
+                        elements = {
+                            { label = 'Yes', value = 'yes' },
+                            { label = 'No', value = 'no' }
+                        }
+                    },
+                    function(confirmData, confirmMenu)
+                        if confirmData.current.value == 'yes' then
+                            TriggerServerEvent('fivem-appearance:deleteOutfit', outfitId)
+                            TriggerEvent('esx:showNotification', 'You have deleted the outfit')
+                        end
+                        confirmMenu.close()
+                    end,
+                    function(confirmData, confirmMenu)
+                        confirmMenu.close()
+                    end
+                )
+            end,
+            function(data, menu)
+                menu.close()
+            end
+        )
+    end)
 end)
 
 AddEventHandler('fivem-appearance:clothingMenu', function(price)
-    
+    ESX.UI.Menu.CloseAll()
     openShop('clothing_menu', price)
 end)
 
-RegisterNetEvent('fivem-appearance:deleteOutfitMenu', function()
-    local outfits = lib.callback.await('fivem-appearance:getOutfits', 100)
-    local Options = {}
-    if outfits then
-        Options = {
-            {
-                title = Strings.go_back_title,
-                event = 'fivem-appearance:clothingShop'
-            }
-        }
-        for i=1, #outfits do
-            Options[#Options + 1] = {
-                title = outfits[i].name,
-                serverEvent = 'fivem-appearance:deleteOutfit',
-                args = outfits[i].id 
-            }
-        end
-    else
-        Options = {
-            {
-                title = Strings.go_back_title,
-                description = Strings.go_back_desc,
-                event = 'fivem-appearance:clothingShop'
-            }
-        }
-    end
-    lib.registerContext({
-        id = 'outfit_delete_menu',
-        title = Strings.delete_outfits_title,
-        options = Options
-    })
-    lib.showContext('outfit_delete_menu')
-end)
-
-RegisterNetEvent('fivem-appearance:browseOutfits', function()
-    local outfits = lib.callback.await('fivem-appearance:getOutfits', 100)
-    local Options = {}
-    if outfits then 
-        Options = {
-            {
-                title = Strings.go_back_title,
-                event = 'fivem-appearance:clothingShop'
-            }
-        }
-        for i=1, #outfits do 
-            Options[#Options + 1] = {
-                title = outfits[i].name,
-                event = 'fivem-appearance:setOutfit',
-                args = {
-                    ped = outfits[i].ped,
-                    components = outfits[i].components,
-                    props = outfits[i].props
-                }
-            }
-        end
-    else
-        Options = {
-            {
-                title = Strings.go_back_title,
-                description = Strings.go_back_desc,
-                event = 'fivem-appearance:clothingShop'
-            }
-        }
-    end
-    lib.registerContext({
-        id = 'outfit_menu',
-        title = Strings.browse_outfits_title,
-        options = Options
-    })
-    lib.showContext('outfit_menu')
-end)
-
 RegisterNetEvent('fivem-appearance:clothingShop', function(price)
-	lib.registerContext({
-		id = 'clothing_menu',
-		title = Strings.clothing_shop_title,
-		options = {
-			{
-				title = Strings.change_clothing_title,
-				description = Strings.change_clothing_desc,
-				arrow = false,
-				event = 'fivem-appearance:clothingMenu',
-                args = price
-			},
-			{
-				title = Strings.browse_outfits_title,
-				description = Strings.browse_outfits_desc,
-				arrow = false,
-				event = 'fivem-appearance:browseOutfits'
-			},
-			{
-				title = Strings.save_outfit_title,
-				description = Strings.save_outfit_desc,
-				arrow = false,
-				event = 'fivem-appearance:saveOutfit'
-			},
-			{
-				title = Strings.delete_outfit_title,
-				description = Strings.delete_outfit_desc,
-				arrow = false,
-				event = 'fivem-appearance:deleteOutfitMenu'
-			},
-		}
-	})
-	lib.showContext('clothing_menu')
+    local elements = {
+        {
+            label = Strings.change_clothing_title,
+            value = 'change_clothing',
+        },
+        {
+            label = Strings.browse_outfits_title,
+            value = 'browse_outfits',
+        },
+        {
+            label = Strings.save_outfit_title,
+            value = 'save_outfit',
+        },
+        {
+            label = Strings.delete_outfit_title,
+            value = 'delete_outfit',
+        }
+    }
+    ESX.UI.Menu.Open('default', GetCurrentResourceName(), 'clothing_menu',
+    {
+        title = Strings.clothing_shop_title,
+        align = 'top-left',
+        elements = elements
+    },
+    function(data, menu)
+        if data.current.value == 'change_clothing' then
+            TriggerEvent('fivem-appearance:clothingMenu', price)
+        elseif data.current.value == 'browse_outfits' then
+            TriggerEvent('fivem-appearance:browseOutfits')
+        elseif data.current.value == 'save_outfit' then
+            TriggerEvent('fivem-appearance:saveOutfit')
+        elseif data.current.value == 'delete_outfit' then
+            TriggerEvent('fivem-appearance:deleteOutfitMenu')
+        end
+    end,
+    function(data, menu)
+        menu.close()
+    end)
 end)
+
 
 CreateThread(function()
     for i=1, #Config.ClothingShops do
@@ -217,7 +269,6 @@ end)
 
 CreateThread(function()
     shops = consolidateShops()
-    local textUI = {}
     while true do
         local sleep = 2000
         if #shops > 0 then
@@ -226,7 +277,7 @@ CreateThread(function()
                 local dist = #(coords - v.coords)
                 if dist < (v.distance + 1) then
                     if not textUI[k] then
-                        lib.showTextUI(showTextUI(v.store))
+                        ESX.ShowHelpNotification(showTextUI(v.store))
                         textUI[k] = true
                     end
                     sleep = 0
@@ -234,7 +285,6 @@ CreateThread(function()
                         openShop(v.store, v.price)
                     end
                 elseif dist > v.distance and textUI[k] then
-                    lib.hideTextUI()
                     textUI[k] = nil
                 end
             end
@@ -253,7 +303,7 @@ RegisterCommand('propfix', function()
     end
 end)
 
-RegisterCommand('reloadchar', function()
+RegisterCommand('fixpj', function()
     ESX.TriggerServerCallback('esx_skin:getPlayerSkin', function(appearance)
         exports['fivem-appearance']:setPlayerAppearance(appearance)
     end)

@@ -45,19 +45,20 @@ end)
 
 -- Callbacks
 
-lib.callback.register('fivem-appearance:getPlayerSkin', function(source)
+ESX.RegisterServerCallback('fivem-appearance:getPlayerSkin', function(source, cb)
 	local xPlayer = ESX.GetPlayerFromId(source)
 	local users = MySQL.query.await('SELECT skin FROM outfits users identifier = ?', {xPlayer.identifier})
+	local appearance = nil
 	if users then
 		local user, appearance = users[1]
 		if user.skin then
 			appearance = json.decode(user.skin)
 		end
 	end
-	return appearance
+	cb(appearance)
 end)
 
-lib.callback.register('fivem-appearance:payFunds', function(source, price)
+ESX.RegisterServerCallback('fivem-appearance:payFunds', function(source, price)
     local xPlayer = ESX.GetPlayerFromId(source)
 	local xAccountMoney = xPlayer.getAccount(Config.PaymentAccount).money 
 	if xAccountMoney < price then 
@@ -68,7 +69,7 @@ lib.callback.register('fivem-appearance:payFunds', function(source, price)
 	end
 end)
 
-lib.callback.register('fivem-appearance:getOutfits', function(source)
+ESX.RegisterServerCallback('fivem-appearance:getOutfits', function(source, cb)
 	local xPlayer = ESX.GetPlayerFromId(source)
     local outfits = {}
     local result = MySQL.query.await('SELECT * FROM outfits WHERE identifier = ?', {xPlayer.identifier})
@@ -82,12 +83,11 @@ lib.callback.register('fivem-appearance:getOutfits', function(source)
 				props = json.decode(result[i].props)
 			}
 		end
-		return outfits
+		cb(outfits)
 	else
-		return false
+		cb(false)
 	end
 end)
-
 -- Commands
 ESX.RegisterCommand('skin', 'admin', function(xPlayer, args, showError)
 	args.playerId.triggerEvent('fivem-appearance:skinCommand')
