@@ -269,6 +269,7 @@ end)
 
 CreateThread(function()
     shops = consolidateShops()
+    textUI = {}
     while true do
         local sleep = 2000
         if #shops > 0 then
